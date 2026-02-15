@@ -1,0 +1,25 @@
+app = "fi-journal"
+primary_region = "fra"
+
+[build]
+  dockerfile = "frontend/Dockerfile"
+  [build.args]
+
+[env]
+  NODE_ENV = "production"
+  DATA_DIR = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[mounts]
+  source = "fi_data"
+  destination = "/data"

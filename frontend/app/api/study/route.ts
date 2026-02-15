@@ -1,33 +1,40 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 
 export async function GET() {
-  const db = await getDb();
-  const rows = await db.all(
-    "SELECT id, title, content, created_at AS createdAt, updated_at AS updatedAt FROM study_notes ORDER BY updated_at DESC"
-  );
-  return NextResponse.json(rows);
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT id, title, content, created_at AS createdAt, updated_at AS updatedAt
+          FROM study_notes
+          ORDER BY updated_at DESC`,
+    args: [],
+  });
+
+  return NextResponse.json(result.rows);
 }
 
-export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { title, content } = body;
+export async function POST(req: Request) {
+  const body = await req.json();
+  const title = String(body.title ?? "").trim();
+  const content = String(body.content ?? "").trim();
 
-  if (!title || typeof title !== "string" || !title.trim()) {
+  if (!title) {
     return NextResponse.json({ message: "Title is required" }, { status: 400 });
   }
 
-  const db = await getDb();
-  const result = await db.run(
-    "INSERT INTO study_notes (title, content) VALUES (?, ?)",
-    title.trim(),
-    content ?? ""
-  );
+  const db = getDb();
+  const insertResult = await db.execute({
+    sql: `INSERT INTO study_notes (title, content, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)`,
+    args: [title, content],
+  });
 
-  const row = await db.get(
-    "SELECT id, title, content, created_at AS createdAt, updated_at AS updatedAt FROM study_notes WHERE id = ?",
-    result.lastID
-  );
+  const newId = Number(insertResult.lastInsertRowid);
+  const created = await db.execute({
+    sql: `SELECT id, title, content, created_at AS createdAt, updated_at AS updatedAt
+          FROM study_notes WHERE id = ?`,
+    args: [newId],
+  });
 
-  return NextResponse.json(row, { status: 201 });
+  return NextResponse.json(created.rows[0], { status: 201 });
 }

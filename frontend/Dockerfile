@@ -1,13 +1,34 @@
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim AS base
 
+# ── Build stage ──────────────────────────────────────────────
+FROM base AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm ci
 
 COPY . .
 RUN npm run build
 
+# ── Production stage ─────────────────────────────────────────
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+# Copy standalone server + static/public assets
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public 2>/dev/null || true
+
+# Create data directory for SQLite
+RUN mkdir -p /data && chown -R node:node /data
+ENV DATA_DIR=/data
+
+USER node
+
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["node", "server.js"]

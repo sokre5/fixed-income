@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-
 import { getDb } from "@/lib/db";
 import { NotePayload, Sentiment } from "@/lib/types";
 
@@ -11,23 +10,23 @@ export async function GET(req: Request) {
   const instrumentId = searchParams.get("instrumentId");
 
   const whereParts: string[] = [];
-  const params: Array<string | number> = [];
+  const args: Array<string | number> = [];
 
   if (sentiment && allowedSentiment.includes(sentiment as Sentiment)) {
     whereParts.push("n.sentiment = ?");
-    params.push(sentiment);
+    args.push(sentiment);
   }
 
   if (instrumentId) {
     whereParts.push("n.instrument_id = ?");
-    params.push(Number(instrumentId));
+    args.push(Number(instrumentId));
   }
 
   const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : "";
 
-  const db = await getDb();
-  const notes = await db.all(
-    `SELECT
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT
       n.id,
       n.instrument_id AS instrumentId,
       i.name AS instrumentName,
@@ -42,10 +41,10 @@ export async function GET(req: Request) {
     INNER JOIN instruments i ON i.id = n.instrument_id
     ${whereSql}
     ORDER BY n.observed_on DESC, n.id DESC`,
-    params,
-  );
+    args,
+  });
 
-  return NextResponse.json(notes);
+  return NextResponse.json(result.rows);
 }
 
 export async function POST(req: Request) {
@@ -67,28 +66,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: "Invalid sentiment" }, { status: 400 });
   }
 
-  const db = await getDb();
-  await db.run(
-    `INSERT INTO instruments (name, updated_at)
-      VALUES (?, CURRENT_TIMESTAMP)
-      ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP`,
-    [instrumentName],
-  );
+  const db = getDb();
 
-  const instrument = await db.get<{ id: number }>("SELECT id FROM instruments WHERE name = ?", [instrumentName]);
+  await db.execute({
+    sql: `INSERT INTO instruments (name, updated_at)
+          VALUES (?, CURRENT_TIMESTAMP)
+          ON CONFLICT(name) DO UPDATE SET updated_at = CURRENT_TIMESTAMP`,
+    args: [instrumentName],
+  });
 
-  if (!instrument) {
+  const instrResult = await db.execute({
+    sql: "SELECT id FROM instruments WHERE name = ?",
+    args: [instrumentName],
+  });
+
+  const instrumentId = instrResult.rows[0]?.id;
+  if (!instrumentId) {
     return NextResponse.json({ message: "Instrument creation failed" }, { status: 500 });
   }
 
-  const insertResult = await db.run(
-    `INSERT INTO notes (instrument_id, data_point, actual_value, expected_value, observed_on, sentiment, commentary, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-    [instrument.id, dataPoint, actualValue, expectedValue, observedOn, sentiment, commentary],
-  );
+  const insertResult = await db.execute({
+    sql: `INSERT INTO notes (instrument_id, data_point, actual_value, expected_value, observed_on, sentiment, commentary, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    args: [instrumentId, dataPoint, actualValue, expectedValue, observedOn, sentiment, commentary],
+  });
 
-  const created = await db.get(
-    `SELECT
+  const newId = Number(insertResult.lastInsertRowid);
+  const created = await db.execute({
+    sql: `SELECT
       n.id,
       n.instrument_id AS instrumentId,
       i.name AS instrumentName,
@@ -102,8 +107,8 @@ export async function POST(req: Request) {
     FROM notes n
     INNER JOIN instruments i ON i.id = n.instrument_id
     WHERE n.id = ?`,
-    [insertResult.lastID],
-  );
+    args: [newId],
+  });
 
-  return NextResponse.json(created, { status: 201 });
+  return NextResponse.json(created.rows[0], { status: 201 });
 }
