@@ -3,6 +3,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import { StudyNote } from "@/lib/types";
 
+function handle401(res: Response) {
+  if (res.status === 401) {
+    window.location.href = "/login";
+    return true;
+  }
+  return false;
+}
+
 const inputClass =
   "w-full border border-terminal-border bg-terminal-black px-2 py-1.5 font-mono text-xs text-fg-primary outline-none focus:border-neon-amber transition-colors";
 
@@ -19,6 +27,7 @@ export function StudyNotes() {
   async function loadNotes() {
     try {
       const res = await fetch("/api/study");
+      if (handle401(res)) return;
       if (!res.ok) throw new Error();
       const data = await res.json();
       setNotes(data);
@@ -43,8 +52,10 @@ export function StudyNotes() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newTitle.trim(), content: "" }),
       });
+      if (handle401(res)) return;
       if (!res.ok) {
-        setError("ERR: Failed to create note");
+        const payload = await res.json().catch(() => ({}));
+        setError(payload.message ?? "ERR: Failed to create note");
         return;
       }
       const created = await res.json();
@@ -78,8 +89,10 @@ export function StudyNotes() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: editTitle, content: editContent }),
       });
+      if (handle401(res)) return;
       if (!res.ok) {
-        setError("ERR: Failed to save");
+        const payload = await res.json().catch(() => ({}));
+        setError(payload.message ?? "ERR: Failed to save");
         return;
       }
       await loadNotes();
@@ -95,8 +108,10 @@ export function StudyNotes() {
     setError("");
     try {
       const res = await fetch(`/api/study/${id}`, { method: "DELETE" });
+      if (handle401(res)) return;
       if (!res.ok) {
-        setError("ERR: Delete failed");
+        const payload = await res.json().catch(() => ({}));
+        setError(payload.message ?? "ERR: Delete failed");
         return;
       }
       if (selectedId === id) {

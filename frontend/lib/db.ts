@@ -1,16 +1,17 @@
 import { createClient, type Client } from "@libsql/client";
 
 let client: Client | null = null;
+let initPromise: Promise<void> | null = null;
 
-export function getDb(): Client {
+export async function getDb(): Promise<Client> {
   if (!client) {
     client = createClient({
       url: process.env.TURSO_DATABASE_URL || "file:data/journal.db",
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
-    // Run schema on first connection
-    initializeDb(client);
+    initPromise = initializeDb(client);
   }
+  await initPromise;
   return client;
 }
 

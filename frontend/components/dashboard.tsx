@@ -1,8 +1,16 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { NoteItem, Sentiment } from "@/lib/types";
+
+function handle401(res: Response) {
+  if (res.status === 401) {
+    window.location.href = "/login";
+    return true;
+  }
+  return false;
+}
 import { SentimentBadge } from "@/components/sentiment-badge";
 import { CommandBar } from "@/components/command-bar";
 
@@ -81,7 +89,7 @@ export function Dashboard() {
   }, [notes]);
 
   /* ── Data loading ─────────────────────────────────────────── */
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const search = new URLSearchParams();
     if (sentimentFilter !== "all") search.set("sentiment", sentimentFilter);
     if (instrumentFilter !== "all") search.set("instrumentId", instrumentFilter);
@@ -91,16 +99,17 @@ export function Dashboard() {
       fetch("/api/instruments"),
     ]);
 
+    if (handle401(notesRes) || handle401(instrumentsRes)) return;
     if (!notesRes.ok || !instrumentsRes.ok) throw new Error("Load failed");
 
     const [notesJson, instrumentsJson] = await Promise.all([notesRes.json(), instrumentsRes.json()]);
     setNotes(notesJson);
     setInstruments(instrumentsJson);
-  }
+  }, [sentimentFilter, instrumentFilter]);
 
   useEffect(() => {
     loadData().catch(() => setErrorMessage("SYS ERROR: Failed to load journal data"));
-  }, [sentimentFilter, instrumentFilter]);
+  }, [loadData]);
 
   /* ── Submit ───────────────────────────────────────────────── */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -127,6 +136,7 @@ export function Dashboard() {
         body: JSON.stringify({ ...formState, instrumentName }),
       });
 
+      if (handle401(response)) return;
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         setErrorMessage(payload.message ?? "ERR: Failed to save");
@@ -145,11 +155,13 @@ export function Dashboard() {
   async function handleDelete(noteId: number) {
     try {
       const response = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
+      if (handle401(response)) return;
       if (response.ok) {
         await loadData();
         return;
       }
-      setErrorMessage("ERR: Delete failed");
+      const payload = await response.json().catch(() => ({}));
+      setErrorMessage(payload.message ?? "ERR: Delete failed");
     } catch {
       setErrorMessage("NET ERR: Could not delete");
     }
@@ -176,8 +188,10 @@ export function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editState),
       });
+      if (handle401(response)) return;
       if (!response.ok) {
-        setErrorMessage("ERR: Update failed");
+        const payload = await response.json().catch(() => ({}));
+        setErrorMessage(payload.message ?? "ERR: Update failed");
         return;
       }
       setEditingId(null);
