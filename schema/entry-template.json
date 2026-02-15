@@ -1,0 +1,9 @@
+{
+  "instrumentName": "German 10Y Bund",
+  "dataPoint": "CPI",
+  "valueDate": "2026-02-15",
+  "actualValue": "2.3% YoY",
+  "expectedValue": "2.5% YoY",
+  "sentiment": "Bullish",
+  "commentary": "Cooling inflation supports duration sentiment and stabilizes long-end risk premium."
+}

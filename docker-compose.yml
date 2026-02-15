@@ -1,0 +1,9 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    container_name: fi-manual-journal
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./frontend/data:/app/data

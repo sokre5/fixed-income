@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+*.tsbuildinfo
+
+# SQLite data
+frontend/data/*.db
+frontend/data/*.sqlite
+
+# OS / IDE
+.DS_Store
+.vscode/
+
+# Environment
+.env
+.env.local
