@@ -45,6 +45,7 @@ export function Dashboard() {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editState, setEditState] = useState<{
+    instrumentName: string;
     dataPoint: string;
     actualValue: string;
     expectedValue: string;
@@ -52,6 +53,7 @@ export function Dashboard() {
     sentiment: Sentiment;
     commentary: string;
   }>({
+    instrumentName: "",
     dataPoint: "",
     actualValue: "",
     expectedValue: "",
@@ -157,6 +159,7 @@ export function Dashboard() {
   function beginEdit(note: NoteItem) {
     setEditingId(note.id);
     setEditState({
+      instrumentName: note.instrumentName,
       dataPoint: note.dataPoint,
       actualValue: note.actualValue,
       expectedValue: note.expectedValue,
