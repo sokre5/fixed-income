@@ -31,6 +31,16 @@ CREATE TABLE IF NOT EXISTS notes (
 CREATE INDEX IF NOT EXISTS idx_notes_instrument_id ON notes(instrument_id);
 CREATE INDEX IF NOT EXISTS idx_notes_sentiment ON notes(sentiment);
 CREATE INDEX IF NOT EXISTS idx_notes_observed_on ON notes(observed_on DESC);
+
+CREATE TABLE IF NOT EXISTS study_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_study_notes_updated ON study_notes(updated_at DESC);
 `;
 
 export async function getDb() {

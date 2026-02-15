@@ -186,7 +186,7 @@ export function Dashboard() {
 
   /* ── Render ────────────────────────────────────────────────── */
   return (
-    <div className="flex min-h-screen flex-col bg-terminal-black font-mono">
+    <div className="flex h-full flex-col bg-terminal-black font-mono">
       {/* ── COMMAND BAR ─────────────────────────────────────── */}
       <CommandBar
         totalNotes={notes.length}
@@ -241,17 +241,19 @@ export function Dashboard() {
               </div>
             </div>
 
-            {/* Data Point + Actual */}
+            {/* Data Point (full width) */}
+            <div>
+              <label className={labelClass}>Data Point</label>
+              <input
+                required
+                value={formState.dataPoint}
+                onChange={(e) => setFormState((s) => ({ ...s, dataPoint: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+
+            {/* Actual + Expected (same row) */}
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className={labelClass}>Data Point</label>
-                <input
-                  required
-                  value={formState.dataPoint}
-                  onChange={(e) => setFormState((s) => ({ ...s, dataPoint: e.target.value }))}
-                  className={inputClass}
-                />
-              </div>
               <div>
                 <label className={labelClass}>Actual</label>
                 <input
@@ -261,17 +263,15 @@ export function Dashboard() {
                   className={inputClass}
                 />
               </div>
-            </div>
-
-            {/* Expected Value */}
-            <div>
-              <label className={labelClass}>Expected</label>
-              <input
-                required
-                value={formState.expectedValue}
-                onChange={(e) => setFormState((s) => ({ ...s, expectedValue: e.target.value }))}
-                className={inputClass}
-              />
+              <div>
+                <label className={labelClass}>Expected</label>
+                <input
+                  required
+                  value={formState.expectedValue}
+                  onChange={(e) => setFormState((s) => ({ ...s, expectedValue: e.target.value }))}
+                  className={inputClass}
+                />
+              </div>
             </div>
 
             {/* Date + Sentiment */}

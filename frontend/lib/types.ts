@@ -27,3 +27,11 @@ export interface NotePayload {
   sentiment: Sentiment;
   commentary: string;
 }
+
+export interface StudyNote {
+  id: number;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
