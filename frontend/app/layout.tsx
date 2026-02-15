@@ -3,14 +3,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fixed-Income Manual Insight Tracker",
-  description: "Manual-entry clarity dashboard for fixed-income market drivers",
+  title: "FI-JOURNAL │ Fixed Income Intelligence Platform",
+  description: "Bloomberg-style manual insight tracker for fixed-income markets",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className="dark">
+      <body className="overflow-hidden">{children}</body>
     </html>
   );
 }

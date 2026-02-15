@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { NoteItem, Sentiment } from "@/lib/types";
 import { SentimentBadge } from "@/components/sentiment-badge";
+import { CommandBar } from "@/components/command-bar";
 
 const sentiments: Sentiment[] = ["Bullish", "Bearish", "Neutral"];
 
@@ -24,6 +25,13 @@ const initialFormState: FormState = {
   sentiment: "Neutral",
   commentary: "",
 };
+
+/* ── Reusable terminal-style classes ─────────────────────────── */
+const inputClass =
+  "w-full border border-terminal-border bg-terminal-black px-2 py-1.5 font-mono text-xs text-fg-primary outline-none focus:border-neon-amber transition-colors";
+const labelClass = "mb-0.5 block font-mono text-[10px] font-bold uppercase tracking-widest text-neon-amber";
+const selectClass =
+  "border border-terminal-border bg-terminal-black px-2 py-1.5 font-mono text-xs text-fg-primary outline-none focus:border-neon-amber cursor-pointer";
 
 export function Dashboard() {
   const [notes, setNotes] = useState<NoteItem[]>([]);
@@ -52,23 +60,36 @@ export function Dashboard() {
     commentary: "",
   });
 
+  /* ── Stats ────────────────────────────────────────────────── */
+  const stats = useMemo(() => {
+    const bullish = notes.filter((n) => n.sentiment === "Bullish").length;
+    const bearish = notes.filter((n) => n.sentiment === "Bearish").length;
+    const neutral = notes.filter((n) => n.sentiment === "Neutral").length;
+    return { bullish, bearish, neutral };
+  }, [notes]);
+
+  /* ── Grouped notes by instrument ──────────────────────────── */
+  const groupedNotes = useMemo(() => {
+    const groups: Record<string, NoteItem[]> = {};
+    for (const note of notes) {
+      if (!groups[note.instrumentName]) groups[note.instrumentName] = [];
+      groups[note.instrumentName].push(note);
+    }
+    return groups;
+  }, [notes]);
+
+  /* ── Data loading ─────────────────────────────────────────── */
   async function loadData() {
     const search = new URLSearchParams();
-    if (sentimentFilter !== "all") {
-      search.set("sentiment", sentimentFilter);
-    }
-    if (instrumentFilter !== "all") {
-      search.set("instrumentId", instrumentFilter);
-    }
+    if (sentimentFilter !== "all") search.set("sentiment", sentimentFilter);
+    if (instrumentFilter !== "all") search.set("instrumentId", instrumentFilter);
 
     const [notesRes, instrumentsRes] = await Promise.all([
       fetch(`/api/notes?${search.toString()}`),
       fetch("/api/instruments"),
     ]);
 
-    if (!notesRes.ok || !instrumentsRes.ok) {
-      throw new Error("Unable to load manual insights");
-    }
+    if (!notesRes.ok || !instrumentsRes.ok) throw new Error("Load failed");
 
     const [notesJson, instrumentsJson] = await Promise.all([notesRes.json(), instrumentsRes.json()]);
     setNotes(notesJson);
@@ -76,9 +97,10 @@ export function Dashboard() {
   }
 
   useEffect(() => {
-    loadData().catch(() => setErrorMessage("Failed to load journal data"));
+    loadData().catch(() => setErrorMessage("SYS ERROR: Failed to load journal data"));
   }, [sentimentFilter, instrumentFilter]);
 
+  /* ── Submit ───────────────────────────────────────────────── */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage("");
@@ -92,7 +114,7 @@ export function Dashboard() {
     }
 
     if (!instrumentName) {
-      setErrorMessage("Choose an instrument or create a new one");
+      setErrorMessage("ERR: Select or create an instrument");
       return;
     }
 
@@ -100,28 +122,24 @@ export function Dashboard() {
       const response = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formState,
-          instrumentName,
-        }),
+        body: JSON.stringify({ ...formState, instrumentName }),
       });
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        setErrorMessage(payload.message ?? "Failed to save note");
+        setErrorMessage(payload.message ?? "ERR: Failed to save");
         return;
       }
 
       setFormState({ ...initialFormState, observedOn: new Date().toISOString().slice(0, 10) });
-      if (instrumentMode === "new") {
-        setNewInstrumentName("");
-      }
+      if (instrumentMode === "new") setNewInstrumentName("");
       await loadData();
     } catch {
-      setErrorMessage("Network error. Check that the app server is running and try again.");
+      setErrorMessage("NET ERR: Server unreachable");
     }
   }
 
+  /* ── Delete ───────────────────────────────────────────────── */
   async function handleDelete(noteId: number) {
     try {
       const response = await fetch(`/api/notes/${noteId}`, { method: "DELETE" });
@@ -129,12 +147,13 @@ export function Dashboard() {
         await loadData();
         return;
       }
-      setErrorMessage("Failed to delete note");
+      setErrorMessage("ERR: Delete failed");
     } catch {
-      setErrorMessage("Network error. Could not delete the note.");
+      setErrorMessage("NET ERR: Could not delete");
     }
   }
 
+  /* ── Edit ──────────────────────────────────────────────────── */
   function beginEdit(note: NoteItem) {
     setEditingId(note.id);
     setEditState({
@@ -154,284 +173,382 @@ export function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editState),
       });
-
       if (!response.ok) {
-        setErrorMessage("Failed to update note");
+        setErrorMessage("ERR: Update failed");
         return;
       }
-
       setEditingId(null);
       await loadData();
     } catch {
-      setErrorMessage("Network error. Could not update the note.");
+      setErrorMessage("NET ERR: Could not update");
     }
   }
 
+  /* ── Render ────────────────────────────────────────────────── */
   return (
-    <main className="min-h-screen bg-surface-950 p-6">
-      <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[1.15fr_2fr]">
-        <section className="rounded-lg border border-surface-800 bg-surface-900 p-4">
-          <p className="text-xs uppercase tracking-widest text-accent-amber">Manual Insight Input</p>
-          <h1 className="mt-1 text-lg font-semibold">Fixed-Income Intelligence Journal</h1>
-          <p className="mt-1 text-sm text-text-secondary">No automation. Manual judgment only.</p>
+    <div className="flex min-h-screen flex-col bg-terminal-black font-mono">
+      {/* ── COMMAND BAR ─────────────────────────────────────── */}
+      <CommandBar
+        totalNotes={notes.length}
+        totalInstruments={instruments.length}
+        bullishCount={stats.bullish}
+        bearishCount={stats.bearish}
+        neutralCount={stats.neutral}
+      />
 
-          <form className="mt-4 space-y-3" onSubmit={handleSubmit}>
+      {/* ── MAIN GRID ───────────────────────────────────────── */}
+      <div className="flex flex-1">
+        {/* ── LEFT: INPUT PANEL ────────────────────────────── */}
+        <aside className="w-[380px] shrink-0 border-r border-terminal-border bg-terminal-dark">
+          <div className="flex items-center gap-2 border-b border-terminal-border px-3 py-1.5">
+            <span className="text-[10px] font-bold tracking-widest text-neon-green">INPUT</span>
+            <span className="text-[10px] text-fg-secondary">MANUAL OBSERVATION ENTRY</span>
+          </div>
+
+          <form className="space-y-3 p-3" onSubmit={handleSubmit}>
+            {/* Instrument Selector */}
             <div>
-              <label className="mb-1 block text-xs text-text-secondary">Instrument</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className={labelClass}>Instrument</label>
+              <div className="flex gap-1">
                 <select
                   value={instrumentMode}
-                  onChange={(event) => setInstrumentMode(event.target.value as "existing" | "new")}
-                  className="rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                  onChange={(e) => setInstrumentMode(e.target.value as "existing" | "new")}
+                  className={`${selectClass} w-[120px]`}
                 >
-                  <option value="existing">Select Existing</option>
-                  <option value="new">Create New</option>
+                  <option value="existing">EXISTING</option>
+                  <option value="new">NEW</option>
                 </select>
                 {instrumentMode === "existing" ? (
                   <select
                     value={selectedInstrumentId}
-                    onChange={(event) => setSelectedInstrumentId(event.target.value)}
-                    className="rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                    onChange={(e) => setSelectedInstrumentId(e.target.value)}
+                    className={`${selectClass} flex-1`}
                   >
-                    <option value="">Select instrument</option>
-                    {instruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id.toString()}>
-                        {instrument.name}
+                    <option value="">-- SELECT --</option>
+                    {instruments.map((inst) => (
+                      <option key={inst.id} value={inst.id.toString()}>
+                        {inst.name}
                       </option>
                     ))}
                   </select>
                 ) : (
                   <input
                     value={newInstrumentName}
-                    onChange={(event) => setNewInstrumentName(event.target.value)}
-                    className="rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                    onChange={(e) => setNewInstrumentName(e.target.value)}
+                    className={`${inputClass} flex-1`}
                   />
                 )}
               </div>
             </div>
+
+            {/* Data Point + Actual */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="mb-1 block text-xs text-text-secondary">Data Point</label>
+                <label className={labelClass}>Data Point</label>
                 <input
                   required
                   value={formState.dataPoint}
-                  onChange={(event) => setFormState((s) => ({ ...s, dataPoint: event.target.value }))}
-                  className="w-full rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                  onChange={(e) => setFormState((s) => ({ ...s, dataPoint: e.target.value }))}
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-text-secondary">Actual Value</label>
+                <label className={labelClass}>Actual</label>
                 <input
                   required
                   value={formState.actualValue}
-                  onChange={(event) => setFormState((s) => ({ ...s, actualValue: event.target.value }))}
-                  className="w-full rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                  onChange={(e) => setFormState((s) => ({ ...s, actualValue: e.target.value }))}
+                  className={inputClass}
                 />
               </div>
             </div>
 
+            {/* Expected Value */}
             <div>
-              <label className="mb-1 block text-xs text-text-secondary">Expected Value</label>
+              <label className={labelClass}>Expected</label>
               <input
                 required
                 value={formState.expectedValue}
-                onChange={(event) => setFormState((s) => ({ ...s, expectedValue: event.target.value }))}
-                className="w-full rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                onChange={(e) => setFormState((s) => ({ ...s, expectedValue: e.target.value }))}
+                className={inputClass}
               />
             </div>
 
+            {/* Date + Sentiment */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="mb-1 block text-xs text-text-secondary">Value Date</label>
+                <label className={labelClass}>Date</label>
                 <input
                   required
                   type="date"
                   value={formState.observedOn}
-                  onChange={(event) => setFormState((s) => ({ ...s, observedOn: event.target.value }))}
-                  className="w-full rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                  onChange={(e) => setFormState((s) => ({ ...s, observedOn: e.target.value }))}
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-text-secondary">Sentiment</label>
+                <label className={labelClass}>Sentiment</label>
                 <select
                   value={formState.sentiment}
-                  onChange={(event) => setFormState((s) => ({ ...s, sentiment: event.target.value as Sentiment }))}
-                  className="w-full rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                  onChange={(e) => setFormState((s) => ({ ...s, sentiment: e.target.value as Sentiment }))}
+                  className={`${selectClass} w-full`}
                 >
-                  {sentiments.map((sentiment) => (
-                    <option key={sentiment} value={sentiment}>
-                      {sentiment}
+                  {sentiments.map((s) => (
+                    <option key={s} value={s}>
+                      {s.toUpperCase()}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
+            {/* Commentary */}
             <div>
-              <label className="mb-1 block text-xs text-text-secondary">Commentary on Data Point</label>
+              <label className={labelClass}>Commentary</label>
               <textarea
                 required
                 value={formState.commentary}
-                onChange={(event) => setFormState((s) => ({ ...s, commentary: event.target.value }))}
-                className="h-28 w-full resize-none rounded border border-surface-800 bg-surface-950 px-3 py-2 text-sm"
+                onChange={(e) => setFormState((s) => ({ ...s, commentary: e.target.value }))}
+                className={`${inputClass} h-24 resize-none`}
               />
             </div>
 
-            {errorMessage ? <p className="text-sm text-signal-bearish">{errorMessage}</p> : null}
+            {/* Error */}
+            {errorMessage && (
+              <div className="border border-neon-red/50 bg-neon-red/5 px-2 py-1 text-[10px] font-bold text-neon-red">
+                {errorMessage}
+              </div>
+            )}
 
+            {/* Submit */}
             <button
-              className="w-full rounded bg-accent-amber px-3 py-2 text-sm font-semibold text-surface-950 hover:brightness-110"
+              className="w-full border border-neon-green bg-neon-green/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-neon-green transition-colors hover:bg-neon-green/20"
               type="submit"
             >
-              Save Manual Insight
+              ▶ Submit Observation
             </button>
           </form>
-        </section>
+        </aside>
 
-        <section className="space-y-4">
-          <div className="rounded-lg border border-surface-800 bg-surface-900 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-medium">Summary of Information</p>
-              <div className="flex gap-2">
-                <select
-                  value={instrumentFilter}
-                  onChange={(event) => setInstrumentFilter(event.target.value)}
-                  className="rounded border border-surface-800 bg-surface-950 px-2 py-1 text-xs"
-                >
-                  <option value="all">All Instruments</option>
-                  {instruments.map((instrument) => (
-                    <option key={instrument.id} value={instrument.id.toString()}>
-                      {instrument.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={sentimentFilter}
-                  onChange={(event) => setSentimentFilter(event.target.value)}
-                  className="rounded border border-surface-800 bg-surface-950 px-2 py-1 text-xs"
-                >
-                  <option value="all">All Sentiment</option>
-                  {sentiments.map((sentiment) => (
-                    <option key={sentiment} value={sentiment}>
-                      {sentiment}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        {/* ── RIGHT: DATA PANEL ─────────────────────────────── */}
+        <main className="flex-1 overflow-auto">
+          {/* Panel Header with Filters */}
+          <div className="flex items-center justify-between border-b border-terminal-border bg-terminal-dark px-4 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold tracking-widest text-neon-green">JOURNAL</span>
+              <span className="text-[10px] text-fg-secondary">
+                {notes.length} OBSERVATION{notes.length !== 1 ? "S" : ""}
+              </span>
             </div>
-
-            <div className="mt-3 space-y-2">
-              {notes.length === 0 ? (
-                <p className="rounded border border-surface-800 bg-surface-950 p-3 text-sm text-text-secondary">
-                  No entries yet. Log your first driver observation to start the journal.
-                </p>
-              ) : (
-                notes.map((note) => (
-                  <article key={note.id} className="rounded border border-surface-800 bg-surface-950 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium">{note.dataPoint}</p>
-                        <p className="text-xs text-text-secondary">
-                          {note.instrumentName} · {note.observedOn}
-                        </p>
-                        <p className="text-xs text-text-secondary">
-                          Actual: {note.actualValue} · Expected: {note.expectedValue}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <SentimentBadge sentiment={note.sentiment} />
-                        <button
-                          className="rounded border border-surface-800 px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
-                          onClick={() => beginEdit(note)}
-                          type="button"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="rounded border border-surface-800 px-2 py-1 text-xs text-text-secondary hover:text-text-primary"
-                          onClick={() => handleDelete(note.id)}
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                    {editingId === note.id ? (
-                      <div className="mt-3 space-y-2 rounded border border-surface-800 p-3">
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            value={editState.dataPoint}
-                            onChange={(event) => setEditState((s) => ({ ...s, dataPoint: event.target.value }))}
-                            className="rounded border border-surface-800 bg-surface-900 px-2 py-1 text-xs"
-                          />
-                          <input
-                            value={editState.actualValue}
-                            onChange={(event) => setEditState((s) => ({ ...s, actualValue: event.target.value }))}
-                            className="rounded border border-surface-800 bg-surface-900 px-2 py-1 text-xs"
-                          />
-                        </div>
-                        <input
-                          value={editState.expectedValue}
-                          onChange={(event) => setEditState((s) => ({ ...s, expectedValue: event.target.value }))}
-                          className="w-full rounded border border-surface-800 bg-surface-900 px-2 py-1 text-xs"
-                        />
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="date"
-                            value={editState.observedOn}
-                            onChange={(event) => setEditState((s) => ({ ...s, observedOn: event.target.value }))}
-                            className="rounded border border-surface-800 bg-surface-900 px-2 py-1 text-xs"
-                          />
-                          <select
-                            value={editState.sentiment}
-                            onChange={(event) =>
-                              setEditState((s) => ({ ...s, sentiment: event.target.value as Sentiment }))
-                            }
-                            className="rounded border border-surface-800 bg-surface-900 px-2 py-1 text-xs"
-                          >
-                            {sentiments.map((sentiment) => (
-                              <option key={sentiment} value={sentiment}>
-                                {sentiment}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <p className="text-xs text-text-secondary">Commentary on {editState.dataPoint}</p>
-                        <textarea
-                          value={editState.commentary}
-                          onChange={(event) => setEditState((s) => ({ ...s, commentary: event.target.value }))}
-                          className="h-20 w-full resize-none rounded border border-surface-800 bg-surface-900 px-2 py-1 text-xs"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            className="rounded bg-accent-amber px-2 py-1 text-xs font-medium text-surface-950"
-                            onClick={() => saveEdit(note.id)}
-                            type="button"
-                          >
-                            Save
-                          </button>
-                          <button
-                            className="rounded border border-surface-800 px-2 py-1 text-xs text-text-secondary"
-                            onClick={() => setEditingId(null)}
-                            type="button"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-2">
-                        <p className="text-xs uppercase tracking-wide text-text-secondary">Commentary on {note.dataPoint}</p>
-                        <p className="mt-1 text-sm leading-relaxed text-text-primary">{note.commentary}</p>
-                      </div>
-                    )}
-                  </article>
-                ))
-              )}
+            <div className="flex items-center gap-2">
+              <select
+                value={instrumentFilter}
+                onChange={(e) => setInstrumentFilter(e.target.value)}
+                className={`${selectClass} text-[10px]`}
+              >
+                <option value="all">ALL INSTRUMENTS</option>
+                {instruments.map((inst) => (
+                  <option key={inst.id} value={inst.id.toString()}>
+                    {inst.name.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={sentimentFilter}
+                onChange={(e) => setSentimentFilter(e.target.value)}
+                className={`${selectClass} text-[10px]`}
+              >
+                <option value="all">ALL SENTIMENT</option>
+                {sentiments.map((s) => (
+                  <option key={s} value={s}>
+                    {s.toUpperCase()}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-        </section>
+
+          {/* Content Area */}
+          <div className="p-3">
+            {notes.length === 0 ? (
+              <div className="border border-terminal-border bg-terminal-dark p-6 text-center">
+                <p className="text-xs text-fg-secondary">NO DATA</p>
+                <p className="mt-1 text-[10px] text-fg-secondary">
+                  Use the INPUT panel to log your first fixed-income observation.
+                </p>
+              </div>
+            ) : (
+              /* ── Grouped by instrument ─────────────────────── */
+              Object.entries(groupedNotes).map(([instrumentName, instrumentNotes]) => (
+                <div key={instrumentName} className="mb-4">
+                  {/* Instrument Header */}
+                  <div className="flex items-center gap-3 border-b border-neon-amber/30 pb-1 mb-1">
+                    <span className="text-[11px] font-bold text-neon-amber">{instrumentName.toUpperCase()}</span>
+                    <span className="text-[10px] text-fg-secondary">
+                      {instrumentNotes.length} entr{instrumentNotes.length !== 1 ? "ies" : "y"}
+                    </span>
+                  </div>
+
+                  {/* Table Header */}
+                  <div className="grid grid-cols-[1fr_100px_100px_90px_80px_60px] gap-px bg-terminal-border text-[10px] font-bold uppercase tracking-widest text-fg-secondary">
+                    <div className="bg-terminal-dark px-2 py-1">Data Point</div>
+                    <div className="bg-terminal-dark px-2 py-1">Actual</div>
+                    <div className="bg-terminal-dark px-2 py-1">Expected</div>
+                    <div className="bg-terminal-dark px-2 py-1">Date</div>
+                    <div className="bg-terminal-dark px-2 py-1">Signal</div>
+                    <div className="bg-terminal-dark px-2 py-1 text-right">Ops</div>
+                  </div>
+
+                  {/* Table Rows */}
+                  {instrumentNotes.map((note) => (
+                    <div key={note.id}>
+                      <div className="grid grid-cols-[1fr_100px_100px_90px_80px_60px] gap-px bg-terminal-border text-xs">
+                        <div className="bg-terminal-black px-2 py-1.5 font-medium text-fg-primary">
+                          {note.dataPoint}
+                        </div>
+                        <div className="bg-terminal-black px-2 py-1.5 font-mono text-neon-cyan">
+                          {note.actualValue}
+                        </div>
+                        <div className="bg-terminal-black px-2 py-1.5 font-mono text-fg-secondary">
+                          {note.expectedValue}
+                        </div>
+                        <div className="bg-terminal-black px-2 py-1.5 text-[10px] text-fg-secondary">
+                          {note.observedOn}
+                        </div>
+                        <div className="bg-terminal-black px-2 py-1">
+                          <SentimentBadge sentiment={note.sentiment} />
+                        </div>
+                        <div className="flex items-center justify-end gap-1 bg-terminal-black px-2 py-1">
+                          <button
+                            className="text-[10px] text-neon-blue hover:text-neon-cyan"
+                            onClick={() => beginEdit(note)}
+                            type="button"
+                          >
+                            EDT
+                          </button>
+                          <button
+                            className="text-[10px] text-neon-red/60 hover:text-neon-red"
+                            onClick={() => handleDelete(note.id)}
+                            type="button"
+                          >
+                            DEL
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Commentary Row */}
+                      {note.commentary && editingId !== note.id && (
+                        <div className="border-l-2 border-terminal-muted bg-terminal-dark px-3 py-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-fg-secondary">
+                            COMMENT ›{" "}
+                          </span>
+                          <span className="text-[11px] leading-relaxed text-fg-primary">{note.commentary}</span>
+                        </div>
+                      )}
+
+                      {/* Inline Edit */}
+                      {editingId === note.id && (
+                        <div className="border border-neon-amber/30 bg-terminal-dark p-2 space-y-2">
+                          <div className="flex items-center gap-1 text-[10px] font-bold tracking-widest text-neon-amber">
+                            ─── EDIT MODE ───
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-fg-secondary">Data Point</label>
+                              <input
+                                value={editState.dataPoint}
+                                onChange={(e) => setEditState((s) => ({ ...s, dataPoint: e.target.value }))}
+                                className={`${inputClass} text-[11px]`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-fg-secondary">Actual</label>
+                              <input
+                                value={editState.actualValue}
+                                onChange={(e) => setEditState((s) => ({ ...s, actualValue: e.target.value }))}
+                                className={`${inputClass} text-[11px]`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-fg-secondary">Expected</label>
+                              <input
+                                value={editState.expectedValue}
+                                onChange={(e) => setEditState((s) => ({ ...s, expectedValue: e.target.value }))}
+                                className={`${inputClass} text-[11px]`}
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-fg-secondary">Date</label>
+                              <input
+                                type="date"
+                                value={editState.observedOn}
+                                onChange={(e) => setEditState((s) => ({ ...s, observedOn: e.target.value }))}
+                                className={`${inputClass} text-[11px]`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-fg-secondary">Sentiment</label>
+                              <select
+                                value={editState.sentiment}
+                                onChange={(e) =>
+                                  setEditState((s) => ({ ...s, sentiment: e.target.value as Sentiment }))
+                                }
+                                className={`${selectClass} w-full text-[11px]`}
+                              >
+                                {sentiments.map((s) => (
+                                  <option key={s} value={s}>
+                                    {s.toUpperCase()}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold uppercase text-fg-secondary">Commentary</label>
+                            <textarea
+                              value={editState.commentary}
+                              onChange={(e) => setEditState((s) => ({ ...s, commentary: e.target.value }))}
+                              className={`${inputClass} h-16 resize-none text-[11px]`}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              className="border border-neon-green bg-neon-green/10 px-3 py-1 text-[10px] font-bold text-neon-green hover:bg-neon-green/20"
+                              onClick={() => saveEdit(note.id)}
+                              type="button"
+                            >
+                              ▶ SAVE
+                            </button>
+                            <button
+                              className="border border-terminal-border px-3 py-1 text-[10px] font-bold text-fg-secondary hover:text-fg-primary"
+                              onClick={() => setEditingId(null)}
+                              type="button"
+                            >
+                              ✕ CANCEL
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </main>
       </div>
-    </main>
+
+      {/* ── STATUS BAR ──────────────────────────────────────── */}
+      <footer className="flex items-center justify-between border-t border-terminal-border bg-terminal-dark px-4 py-1 text-[10px]">
+        <span className="text-fg-secondary">
+          MANUAL ENTRY │ NO AUTOMATION │ NO LIVE FEEDS
+        </span>
+        <span className="text-fg-secondary">
+          SQLite │ Next.js │ v0.1.0
+        </span>
+      </footer>
+    </div>
   );
 }

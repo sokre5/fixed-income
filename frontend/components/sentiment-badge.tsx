@@ -1,17 +1,23 @@
 import { Sentiment } from "@/lib/types";
 
 const toneBySentiment: Record<Sentiment, string> = {
-  Bullish: "bg-signal-bullish/20 text-signal-bullish border-signal-bullish/40",
-  Bearish: "bg-signal-bearish/20 text-signal-bearish border-signal-bearish/40",
-  Neutral: "bg-signal-neutral/20 text-signal-neutral border-signal-neutral/40",
+  Bullish: "bg-neon-green/10 text-neon-green border-neon-green/50",
+  Bearish: "bg-neon-red/10 text-neon-red border-neon-red/50",
+  Neutral: "bg-neon-amber/10 text-neon-amber border-neon-amber/50",
+};
+
+const symbolBySentiment: Record<Sentiment, string> = {
+  Bullish: "▲",
+  Bearish: "▼",
+  Neutral: "◆",
 };
 
 export function SentimentBadge({ sentiment }: { sentiment: Sentiment }) {
   return (
     <span
-      className={`inline-flex items-center rounded border px-2 py-1 text-xs font-medium tracking-wide ${toneBySentiment[sentiment]}`}
+      className={`inline-flex items-center gap-1 border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest ${toneBySentiment[sentiment]}`}
     >
-      {sentiment}
+      {symbolBySentiment[sentiment]} {sentiment}
     </span>
   );
 }

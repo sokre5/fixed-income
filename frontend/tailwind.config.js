@@ -3,26 +3,34 @@ module.exports = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        mono: ['"JetBrains Mono"', '"Fira Code"', '"SF Mono"', 'Consolas', 'monospace'],
+      },
       colors: {
-        surface: {
-          950: "#070A0E",
-          900: "#0E141C",
-          800: "#17202B"
+        terminal: {
+          black: "#0a0a0a",
+          dark: "#111111",
+          panel: "#1a1a1a",
+          border: "#2a2a2a",
+          muted: "#3a3a3a",
         },
-        text: {
-          primary: "#E6EDF7",
-          secondary: "#9AAABA"
+        fg: {
+          primary: "#cccccc",
+          secondary: "#777777",
+          bright: "#ffffff",
         },
-        signal: {
-          bullish: "#4ADE80",
-          bearish: "#F87171",
-          neutral: "#FBBF24"
+        neon: {
+          green: "#00ff41",
+          red: "#ff3333",
+          amber: "#ffaa00",
+          cyan: "#00d4ff",
+          blue: "#4488ff",
         },
-        accent: {
-          amber: "#F59E0B"
-        }
-      }
-    }
+      },
+      borderRadius: {
+        none: "0",
+      },
+    },
   },
   plugins: [],
 };
