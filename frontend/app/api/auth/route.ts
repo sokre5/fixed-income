@@ -14,28 +14,33 @@ function hashToken(password: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { password } = body;
-  const secret = process.env.APP_PASSWORD;
+  try {
+    const body = await request.json();
+    const { password } = body;
+    const secret = process.env.APP_PASSWORD;
 
-  if (!secret) {
-    return NextResponse.json({ message: "No password configured" }, { status: 500 });
+    if (!secret) {
+      return NextResponse.json({ message: "No password configured" }, { status: 500 });
+    }
+
+    if (password !== secret) {
+      return NextResponse.json({ message: "Invalid password" }, { status: 401 });
+    }
+
+    const response = NextResponse.json({ ok: true });
+    response.cookies.set(SESSION_COOKIE, hashToken(secret), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: SESSION_MAX_AGE,
+      path: "/",
+    });
+
+    return response;
+  } catch (err) {
+    console.error("POST /api/auth error:", err);
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
-
-  if (password !== secret) {
-    return NextResponse.json({ message: "Invalid password" }, { status: 401 });
-  }
-
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, hashToken(secret), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: SESSION_MAX_AGE,
-    path: "/",
-  });
-
-  return response;
 }
 
 export async function DELETE() {

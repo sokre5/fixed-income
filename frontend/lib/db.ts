@@ -9,7 +9,11 @@ export async function getDb(): Promise<Client> {
       url: process.env.TURSO_DATABASE_URL || "file:data/journal.db",
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
-    initPromise = initializeDb(client);
+    initPromise = initializeDb(client).catch((err) => {
+      client = null;
+      initPromise = null;
+      throw err;
+    });
   }
   await initPromise;
   return client;

@@ -56,6 +56,3 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-
-// Export hash for use in login API
-export { hashToken, SESSION_COOKIE, SESSION_MAX_AGE };
